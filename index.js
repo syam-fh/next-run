@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 
 /*!
- * next-server v1.0.0
+ * next-start v1.1.0
  * (c) 2025 Syam Farijal
  * Released under the MIT License
  */
 
-import { execSync } from 'child_process'
+import { spawn } from 'child_process'
 import inquirer from 'inquirer'
 import chalk from 'chalk'
 import fs from 'fs'
 import path from 'path'
 import { createRequire } from 'module'
+
 const require = createRequire(import.meta.url)
 const pkg = require('./package.json')
 
@@ -24,6 +25,8 @@ const log = {
   title: (msg) => console.log(chalk.bold.magenta(msg)),
 }
 
+// ─── Utilities ─────────────────────────────────────────────
+
 function isNextJsProject() {
   try {
     const pkgPath = path.join(process.cwd(), 'package.json')
@@ -31,38 +34,76 @@ function isNextJsProject() {
     const projectPkg = JSON.parse(content)
     return (
       (projectPkg.dependencies && projectPkg.dependencies.next) ||
-      (projectPkg.devDependencies && projectPkg.devDependencies.neuxt)
+      (projectPkg.devDependencies && projectPkg.devDependencies.next)
     )
   } catch {
     return false
   }
 }
 
+function openBrowser(url) {
+  let cmd, args
+  if (process.platform === 'win32') {
+    cmd = 'cmd'
+    args = ['/c', 'start', '""', url]
+  } else if (process.platform === 'darwin') {
+    cmd = 'open'
+    args = [url]
+  } else {
+    cmd = 'xdg-open'
+    args = [url]
+  }
+
+  const child = spawn(cmd, args, { stdio: 'ignore' })
+  child.on('error', (err) => {
+    // Silently ignore (e.g., headless server)
+    console.debug('Browser open failed:', err.message)
+  })
+}
+
+function runBuildOrStartCommand(cmd) {
+  try {
+    spawn(cmd, { stdio: 'inherit', shell: true })
+      .on('error', () => {
+        log.error(`❌ Command failed: ${cmd}`)
+        process.exit(1)
+      })
+      .on('exit', (code) => {
+        if (code !== 0) process.exit(code || 1)
+      })
+  } catch (err) {
+    log.error(`❌ Command failed: ${cmd}`)
+    process.exit(1)
+  }
+}
+
+// ─── Commands ──────────────────────────────────────────────
+
 function showHelp() {
   console.log(`
-${chalk.bold('next-server')} – CLI tool to manage Next.js development and production workflows.
+${chalk.bold('next-start')} – CLI tool to manage Next.js development and production workflows.
 
 ${chalk.bold('Interactive mode (default):')}
-  next-server                → Display interactive menu
+  next-start                → Display interactive menu
 
 ${chalk.bold('Non-interactive mode:')}
-  next-server --dev [--host <addr>] [--port <num>]
-  next-server --build
-  next-server --start
+  next-start --dev [--host <addr>] [--port <num>]
+  next-start --build
+  next-start --start
 
 ${chalk.bold('Host options:')}
-  --host 127.0.0.1    → Local only (secure, default in interactive mode)
-  --host 0.0.0.0      → Accessible on local network (use cautiously)
+  --host 127.0.0.1    → Local only (secure)
+  --host 0.0.0.0      → Network accessible (use cautiously)
 
 ${chalk.bold('Examples:')}
-  next-server --dev --host 127.0.0.1 --port 4000
-  next-server --dev --host 0.0.0.0 --port 3001
+  next-start --dev --host 127.0.0.1 --port 4000
+  next-start --dev --host 0.0.0.0
 
 ${chalk.bold('Other:')}
-  next-server --help    → Show this help
-  next-server --version → Show version
+  next-start --help    → Show help
+  next-start --version → Show version
 
-${chalk.dim('Note: Uses "npx next" to ensure local Next.js CLI is used.')}
+${chalk.dim('Note: Auto-opens browser for dev server. Uses local Next.js via npx.')}
 `)
   process.exit(0)
 }
@@ -70,15 +111,6 @@ ${chalk.dim('Note: Uses "npx next" to ensure local Next.js CLI is used.')}
 function showVersion() {
   console.log(pkg.version)
   process.exit(0)
-}
-
-function runCommand(cmd) {
-  try {
-    execSync(cmd, { stdio: 'inherit' })
-  } catch (err) {
-    log.error(`❌ Command failed: ${cmd}`)
-    process.exit(1)
-  }
 }
 
 function getPortFromEnv() {
@@ -101,7 +133,7 @@ async function selectHost() {
       choices: [
         { name: '🔒 Secure (localhost only) — 127.0.0.1', value: '127.0.0.1' },
         { name: '🌐 Open (network accessible) — 0.0.0.0', value: '0.0.0.0' },
-        { name: '✏️ Custom host (e.g., 192.168.x.x)', value: 'custom' },
+        { name: '✏️ Custom host', value: 'custom' },
       ],
     },
   ])
@@ -112,10 +144,7 @@ async function selectHost() {
         type: 'input',
         name: 'customHost',
         message: 'Enter custom host address:',
-        validate: (input) => {
-          const trimmed = input.trim()
-          return trimmed ? true : 'Host address cannot be empty.'
-        },
+        validate: (input) => !!input.trim() || 'Host cannot be empty.',
       },
     ])
     return customHost.trim()
@@ -128,7 +157,6 @@ async function devMode(port = null, host = null) {
   let finalPort = port
   let finalHost = host
 
-  // Port selection
   if (finalPort === null) {
     const envPort = getPortFromEnv()
     const suggestedPort = envPort || DEFAULT_PORT
@@ -140,42 +168,65 @@ async function devMode(port = null, host = null) {
         default: suggestedPort.toString(),
         validate: (input) => {
           const num = parseInt(input, 10)
-          return !isNaN(num) && num > 0 && num < 65536
-            ? true
-            : 'Please enter a valid port number between 1 and 65535.'
+          return !isNaN(num) && num > 0 && num < 65536 ? true : 'Port must be between 1 and 65535.'
         },
       },
     ])
     finalPort = parseInt(userPort, 10)
   }
 
-  // Host selection
   if (finalHost === null) {
     finalHost = await selectHost()
   }
 
+  // Display host for URL should be 'localhost' if binding to 0.0.0.0
+  const displayHost = finalHost === '0.0.0.0' ? 'localhost' : finalHost
+  const url = `http://${displayHost}:${finalPort}`
+
   log.info(`🚀 Starting Next.js dev server on ${finalHost}:${finalPort}...`)
 
-  // Use npx to ensure local next binary is used
-  const devCommand = `npx next dev --port ${finalPort} --hostname ${finalHost}`
-  runCommand(devCommand)
+  // Launch Next.js dev server in background
+  const devProcess = spawn(`npx next dev --port ${finalPort} --hostname ${finalHost}`, {
+    stdio: 'inherit',
+    shell: true,
+  })
+
+  devProcess.on('error', (err) => {
+    log.error(`❌ Failed to start dev server: ${err.message}`)
+    process.exit(1)
+  })
+
+  // Auto-open browser after short delay
+  setTimeout(() => {
+    log.info(`🌐 Opening ${url} in your browser...`)
+    openBrowser(url)
+  }, 2000)
+
+  // Keep process alive
+  process.on('exit', () => devProcess.kill())
+  process.on('SIGINT', () => {
+    devProcess.kill()
+    process.exit(0)
+  })
 }
 
 function buildMode() {
   log.info('📦 Building Next.js application for production...')
-  runCommand('npm run build')
+  runBuildOrStartCommand('npm run build')
   log.success('✅ Build completed successfully.')
 }
 
 function startMode() {
   log.info('▶️ Starting production server...')
-  runCommand('npm start')
+  runBuildOrStartCommand('npm start')
 }
+
+// ─── Menu & Main ───────────────────────────────────────────
 
 async function showMenu() {
   if (!isNextJsProject()) {
     log.error(
-      '❌ This does not appear to be a Next.js project.\n   Make sure "next" is listed in your package.json dependencies.'
+      '❌ This does not appear to be a Next.js project.\n   Make sure "next" is in your package.json.'
     )
     process.exit(1)
   }
@@ -215,7 +266,8 @@ async function showMenu() {
   }
 }
 
-// === Main execution logic ===
+// ─── CLI Parsing ───────────────────────────────────────────
+
 const args = process.argv.slice(2)
 
 if (args.includes('--help') || args.includes('-h')) {
@@ -225,14 +277,12 @@ if (args.includes('--version') || args.includes('-v')) {
   showVersion()
 }
 
-// Interactive mode
 if (args.length === 0) {
   console.clear()
   await showMenu()
   process.exit(0)
 }
 
-// Parse CLI flags
 const hasDev = args.includes('--dev')
 const hasBuild = args.includes('--build')
 const hasStart = args.includes('--start')
@@ -247,7 +297,7 @@ const hostValue = hostIndex !== -1 ? args[hostIndex + 1] : null
 let parsedPort = null
 if (portValue !== null) {
   if (!/^\d+$/.test(portValue)) {
-    log.error('❌ --port must be followed by a valid integer.')
+    log.error('❌ --port must be followed by a number.')
     process.exit(1)
   }
   parsedPort = parseInt(portValue, 10)
@@ -262,38 +312,35 @@ let parsedHost = null
 if (hostValue !== null) {
   const trimmed = hostValue.trim()
   if (!trimmed) {
-    log.error('❌ --host must be followed by a valid host address.')
+    log.error('❌ --host must be followed by a host address.')
     process.exit(1)
   }
   parsedHost = trimmed
 }
 
-// --port and --host only allowed with --dev
 if ((portValue !== null || hostValue !== null) && !hasDev) {
   log.error('❌ --port and --host can only be used with --dev.')
   process.exit(1)
 }
 
-// Validate exactly one mode
 const modes = [hasDev, hasBuild, hasStart].filter(Boolean)
 if (modes.length === 0) {
   log.error('❌ Please specify one of: --dev, --build, or --start.')
   process.exit(1)
 }
 if (modes.length > 1) {
-  log.error('❌ Only one mode can be specified at a time.')
+  log.error('❌ Only one mode may be specified at a time.')
   process.exit(1)
 }
 
-// Safety check for non-interactive mode
 if (!isNextJsProject()) {
   log.error('❌ This does not appear to be a Next.js project.')
   process.exit(1)
 }
 
-// Execute
+// Run non-interactive mode
 if (hasDev) {
-  devMode(parsedPort, parsedHost)
+  await devMode(parsedPort, parsedHost)
 } else if (hasBuild) {
   buildMode()
 } else if (hasStart) {
