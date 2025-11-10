@@ -4,17 +4,19 @@ A simple CLI tool to quickly run `npm run dev`, `npm run build`, or `npm run sta
 
 ## ✨ Features
 
-- Choose your mode: **dev**, **build**, or **start**.
-- Optionally specify a custom **PORT** before running the command.
-- Skip typing full `npm run ...` commands—just run `next-server` and go!
+* Choose your mode: **dev**, **build**, or **start**.
+* Optionally specify a custom **PORT** before running the command.
+* Skip typing full `npm run ...` commands—just run `next-server` and go!
 
 ## 📌 Requirements
 
-- **Node.js ≥ 14.8.0** (recommended: **Node.js 18+**)
-  - This tool uses **ECMAScript Modules (ESM)** via `import` syntax.
-  - Older Node.js versions (<14.8) **do not support ESM in CLI scripts** and will fail.
+* **Node.js ≥ 14.8.0** (recommended: **Node.js 18+**)
 
-> 💡 Check your version with:  
+  * This tool uses **ECMAScript Modules (ESM)** syntax internally (`import/export`).
+  * CLI runs independently via Node, so your project can still use CommonJS without issues.
+
+> 💡 Check your version with:
+>
 > ```bash
 > node --version
 > ```
@@ -49,12 +51,6 @@ Ensure your `package.json` includes the standard scripts:
 npm install -g https://github.com/syam-fh/next-server.git
 ```
 
-> 💡 This package uses:
-> - [`chalk@5`](https://www.npmjs.com/package/chalk) — **ESM-only**, for terminal styling  
-> - [`inquirer@12`](https://www.npmjs.com/package/inquirer) — **ESM-only**, for interactive prompts  
->
-> Since both are listed in `dependencies`, **npm installs them automatically** during global install. No extra steps needed!
-
 Then, from any Next.js project directory:
 
 ```bash
@@ -67,10 +63,10 @@ next-server
 npx syam-fh/next-server
 ```
 
-Great for quick use or testing—npx handles dependency installation temporarily under the hood.
+> 💡 `npx` handles temporary dependency installation automatically, so no extra steps needed.
 
 ---
 
-> ⚠️ **Note**: Because this tool uses modern ESM (`import` syntax) and ESM-only dependencies, it **will not work** in CommonJS-only environments or with Node.js < 14.8. Make sure your runtime environment meets the requirements above.
+> ⚠️ **Note**: The CLI uses modern ESM internally and ESM-only dependencies (`chalk@5`, `inquirer@12`). You don’t need to convert your project—just ensure your **Node.js version is ≥14.8**.
 
 ---
