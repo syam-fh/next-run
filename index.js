@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /*!
- * next-start v1.1.1
+ * next-server v1.1.1
  * (c) 2025 Syam Farijal
  * Released under the MIT License
  */
@@ -65,27 +65,27 @@ function openBrowser(url) {
 
 function showHelp() {
   console.log(`
-${chalk.bold('next-start')} – CLI tool to manage Next.js development and production workflows.
+${chalk.bold('next-server')} – CLI tool to manage Next.js development and production workflows.
 
 ${chalk.bold('Interactive mode (default):')}
-  next-start                → Display interactive menu
+  next-server                → Display interactive menu
 
 ${chalk.bold('Non-interactive mode:')}
-  next-start --dev [--host <addr>] [--port <num>]
-  next-start --build
-  next-start --start
+  next-server --dev [--host <addr>] [--port <num>]
+  next-server --build
+  next-server --start
 
 ${chalk.bold('Host options:')}
   --host 127.0.0.1    → Local only (secure)
   --host 0.0.0.0      → Network accessible (use cautiously)
 
 ${chalk.bold('Examples:')}
-  next-start --dev --host 127.0.0.1 --port 4000
-  next-start --dev --host 0.0.0.0
+  next-server --dev --host 127.0.0.1 --port 4000
+  next-server --dev --host 0.0.0.0
 
 ${chalk.bold('Other:')}
-  next-start --help    → Show help
-  next-start --version → Show version
+  next-server --help    → Show help
+  next-server --version → Show version
 
 ${chalk.dim('Note: Auto-opens browser for dev server. Uses local Next.js via npx.')}
 `)
