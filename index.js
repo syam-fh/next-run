@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /*!
- * next-start v1.1.0
+ * next-start v1.1.1
  * (c) 2025 Syam Farijal
  * Released under the MIT License
  */
@@ -61,22 +61,6 @@ function openBrowser(url) {
   })
 }
 
-function runBuildOrStartCommand(cmd) {
-  try {
-    spawn(cmd, { stdio: 'inherit', shell: true })
-      .on('error', () => {
-        log.error(`❌ Command failed: ${cmd}`)
-        process.exit(1)
-      })
-      .on('exit', (code) => {
-        if (code !== 0) process.exit(code || 1)
-      })
-  } catch (err) {
-    log.error(`❌ Command failed: ${cmd}`)
-    process.exit(1)
-  }
-}
-
 // ─── Commands ──────────────────────────────────────────────
 
 function showHelp() {
@@ -122,6 +106,17 @@ function getPortFromEnv() {
   } catch {
     return null
   }
+}
+
+function runBuildOrStartCommand(cmd) {
+  const child = spawn(cmd, { stdio: 'inherit', shell: true })
+  child.on('error', () => {
+    log.error(`❌ Command failed: ${cmd}`)
+    process.exit(1)
+  })
+  child.on('exit', (code) => {
+    if (code !== 0) process.exit(code || 1)
+  })
 }
 
 async function selectHost() {
@@ -179,13 +174,12 @@ async function devMode(port = null, host = null) {
     finalHost = await selectHost()
   }
 
-  // Display host for URL should be 'localhost' if binding to 0.0.0.0
   const displayHost = finalHost === '0.0.0.0' ? 'localhost' : finalHost
   const url = `http://${displayHost}:${finalPort}`
 
   log.info(`🚀 Starting Next.js dev server on ${finalHost}:${finalPort}...`)
+  log.info(`✅ Dev server is running. Press ${chalk.bold('Ctrl+C')} to stop.`)
 
-  // Launch Next.js dev server in background
   const devProcess = spawn(`npx next dev --port ${finalPort} --hostname ${finalHost}`, {
     stdio: 'inherit',
     shell: true,
@@ -196,17 +190,27 @@ async function devMode(port = null, host = null) {
     process.exit(1)
   })
 
-  // Auto-open browser after short delay
+  // Auto-open browser after delay
   setTimeout(() => {
     log.info(`🌐 Opening ${url} in your browser...`)
     openBrowser(url)
   }, 2000)
 
-  // Keep process alive
-  process.on('exit', () => devProcess.kill())
-  process.on('SIGINT', () => {
+  // Graceful shutdown
+  const shutdown = () => {
+    log.info('\n🛑 Shutting down dev server...')
     devProcess.kill()
     process.exit(0)
+  }
+
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
+
+  devProcess.on('exit', (code) => {
+    if (code !== 0) {
+      log.error(`⚠️ Dev server exited with code ${code}`)
+    }
+    process.exit(code || 0)
   })
 }
 
@@ -221,7 +225,7 @@ function startMode() {
   runBuildOrStartCommand('npm start')
 }
 
-// ─── Menu & Main ───────────────────────────────────────────
+// ─── Interactive Menu ──────────────────────────────────────
 
 async function showMenu() {
   if (!isNextJsProject()) {
@@ -253,9 +257,11 @@ async function showMenu() {
       break
     case 'build':
       buildMode()
+      process.exit(0)
       break
     case 'start':
       startMode()
+      process.exit(0)
       break
     case 'help':
       showHelp()
@@ -266,83 +272,87 @@ async function showMenu() {
   }
 }
 
-// ─── CLI Parsing ───────────────────────────────────────────
+// ─── MAIN EXECUTION (Wrapped in async IIFE) ────────────────
 
 const args = process.argv.slice(2)
 
-if (args.includes('--help') || args.includes('-h')) {
-  showHelp()
-}
-if (args.includes('--version') || args.includes('-v')) {
-  showVersion()
-}
+;(async () => {
+  if (args.includes('--help') || args.includes('-h')) {
+    showHelp()
+  }
+  if (args.includes('--version') || args.includes('-v')) {
+    showVersion()
+  }
 
-if (args.length === 0) {
-  console.clear()
-  await showMenu()
-  process.exit(0)
-}
+  if (args.length === 0) {
+    console.clear()
+    await showMenu()
+    return // ✅ Now safe inside async IIFE
+  }
 
-const hasDev = args.includes('--dev')
-const hasBuild = args.includes('--build')
-const hasStart = args.includes('--start')
+  const hasDev = args.includes('--dev')
+  const hasBuild = args.includes('--build')
+  const hasStart = args.includes('--start')
 
-const portIndex = args.indexOf('--port')
-const portValue = portIndex !== -1 ? args[portIndex + 1] : null
+  const portIndex = args.indexOf('--port')
+  const portValue = portIndex !== -1 ? args[portIndex + 1] : null
 
-const hostIndex = args.indexOf('--host')
-const hostValue = hostIndex !== -1 ? args[hostIndex + 1] : null
+  const hostIndex = args.indexOf('--host')
+  const hostValue = hostIndex !== -1 ? args[hostIndex + 1] : null
 
-// Validate port
-let parsedPort = null
-if (portValue !== null) {
-  if (!/^\d+$/.test(portValue)) {
-    log.error('❌ --port must be followed by a number.')
+  // Validate port
+  let parsedPort = null
+  if (portValue !== null) {
+    if (!/^\d+$/.test(portValue)) {
+      log.error('❌ --port must be followed by a number.')
+      process.exit(1)
+    }
+    parsedPort = parseInt(portValue, 10)
+    if (parsedPort <= 0 || parsedPort >= 65536) {
+      log.error('❌ Port must be between 1 and 65535.')
+      process.exit(1)
+    }
+  }
+
+  // Validate host
+  let parsedHost = null
+  if (hostValue !== null) {
+    const trimmed = hostValue.trim()
+    if (!trimmed) {
+      log.error('❌ --host must be followed by a host address.')
+      process.exit(1)
+    }
+    parsedHost = trimmed
+  }
+
+  if ((portValue !== null || hostValue !== null) && !hasDev) {
+    log.error('❌ --port and --host can only be used with --dev.')
     process.exit(1)
   }
-  parsedPort = parseInt(portValue, 10)
-  if (parsedPort <= 0 || parsedPort >= 65536) {
-    log.error('❌ Port must be between 1 and 65535.')
+
+  const modes = [hasDev, hasBuild, hasStart].filter(Boolean)
+  if (modes.length === 0) {
+    log.error('❌ Please specify one of: --dev, --build, or --start.')
     process.exit(1)
   }
-}
-
-// Validate host
-let parsedHost = null
-if (hostValue !== null) {
-  const trimmed = hostValue.trim()
-  if (!trimmed) {
-    log.error('❌ --host must be followed by a host address.')
+  if (modes.length > 1) {
+    log.error('❌ Only one mode may be specified at a time.')
     process.exit(1)
   }
-  parsedHost = trimmed
-}
 
-if ((portValue !== null || hostValue !== null) && !hasDev) {
-  log.error('❌ --port and --host can only be used with --dev.')
-  process.exit(1)
-}
+  if (!isNextJsProject()) {
+    log.error('❌ This does not appear to be a Next.js project.')
+    process.exit(1)
+  }
 
-const modes = [hasDev, hasBuild, hasStart].filter(Boolean)
-if (modes.length === 0) {
-  log.error('❌ Please specify one of: --dev, --build, or --start.')
+  if (hasDev) {
+    await devMode(parsedPort, parsedHost)
+  } else if (hasBuild) {
+    buildMode()
+  } else if (hasStart) {
+    startMode()
+  }
+})().catch((err) => {
+  log.error(`💥 Unexpected error: ${err.message}`)
   process.exit(1)
-}
-if (modes.length > 1) {
-  log.error('❌ Only one mode may be specified at a time.')
-  process.exit(1)
-}
-
-if (!isNextJsProject()) {
-  log.error('❌ This does not appear to be a Next.js project.')
-  process.exit(1)
-}
-
-// Run non-interactive mode
-if (hasDev) {
-  await devMode(parsedPort, parsedHost)
-} else if (hasBuild) {
-  buildMode()
-} else if (hasStart) {
-  startMode()
-}
+})
