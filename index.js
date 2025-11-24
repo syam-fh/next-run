@@ -1,11 +1,5 @@
 #!/usr/bin/env node
 
-/*!
- * next-server v1.1.1
- * (c) 2025 Syam Farijal
- * Released under the MIT License
- */
-
 import { spawn } from 'child_process'
 import inquirer from 'inquirer'
 import chalk from 'chalk'
