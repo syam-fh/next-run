@@ -11,6 +11,7 @@ import inquirer from 'inquirer'
 import chalk from 'chalk'
 import fs from 'fs'
 import path from 'path'
+import net from 'net'
 import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
@@ -39,6 +40,46 @@ function isNextJsProject() {
   } catch {
     return false
   }
+}
+
+function waitForPort(port, host = 'localhost', timeout = 60000) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now()
+    const interval = 200
+
+    const check = () => {
+      const socket = new net.Socket()
+      
+      socket.setTimeout(200)
+      
+      socket.on('connect', () => {
+        socket.destroy()
+        resolve()
+      })
+
+      socket.on('timeout', () => {
+        socket.destroy()
+        tryAgain()
+      })
+
+      socket.on('error', () => {
+        socket.destroy()
+        tryAgain()
+      })
+
+      socket.connect(port, host)
+    }
+
+    const tryAgain = () => {
+      if (Date.now() - start > timeout) {
+        reject(new Error('Timeout waiting for server to start'))
+        return
+      }
+      setTimeout(check, interval)
+    }
+
+    check()
+  })
 }
 
 function openBrowser(url) {
@@ -190,11 +231,15 @@ async function devMode(port = null, host = null) {
     process.exit(1)
   })
 
-  // Auto-open browser after delay
-  setTimeout(() => {
-    log.info(`🌐 Opening ${url} in your browser...`)
-    openBrowser(url)
-  }, 2000)
+  // Auto-open browser when port is ready
+  waitForPort(finalPort, finalHost === '0.0.0.0' ? 'localhost' : finalHost)
+    .then(() => {
+      log.info(`🌐 Opening ${url} in your browser...`)
+      openBrowser(url)
+    })
+    .catch((err) => {
+      log.error(`⚠️ Could not auto-open browser: ${err.message}`)
+    })
 
   // Graceful shutdown
   const shutdown = () => {
