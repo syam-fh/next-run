@@ -9,7 +9,7 @@ import net from 'net'
 import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
-const pkg = require('./package.json')
+const pkg = require('../package.json')
 
 const DEFAULT_PORT = 3000
 
@@ -43,9 +43,9 @@ function waitForPort(port, host = 'localhost', timeout = 60000) {
 
     const check = () => {
       const socket = new net.Socket()
-      
+
       socket.setTimeout(200)
-      
+
       socket.on('connect', () => {
         socket.destroy()
         resolve()
@@ -143,14 +143,22 @@ function getPortFromEnv() {
   }
 }
 
-function runBuildOrStartCommand(cmd) {
-  const child = spawn(cmd, { stdio: 'inherit', shell: true })
-  child.on('error', () => {
-    log.error(`❌ Command failed: ${cmd}`)
-    process.exit(1)
-  })
-  child.on('exit', (code) => {
-    if (code !== 0) process.exit(code || 1)
+function runCommand(cmd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, { stdio: 'inherit', shell: true })
+
+    child.on('error', (err) => {
+      log.error(`❌ Command failed: ${cmd}`)
+      reject(err)
+    })
+
+    child.on('exit', (code) => {
+      if (code === 0) {
+        resolve()
+      } else {
+        reject(new Error(`Command exited with code ${code}`))
+      }
+    })
   })
 }
 
@@ -253,15 +261,25 @@ async function devMode(port = null, host = null) {
   })
 }
 
-function buildMode() {
+async function buildMode() {
   log.info('📦 Building Next.js application for production...')
-  runBuildOrStartCommand('npm run build')
-  log.success('✅ Build completed successfully.')
+  try {
+    await runCommand('CI=true npm run build')
+    log.success('✅ Build completed successfully.')
+  } catch (err) {
+    log.error(`❌ Build failed: ${err.message}`)
+    process.exit(1)
+  }
 }
 
-function startMode() {
+async function startMode() {
   log.info('▶️ Starting production server...')
-  runBuildOrStartCommand('npm start')
+  try {
+    await runCommand('npm start')
+  } catch (err) {
+    log.error(`❌ Start failed: ${err.message}`)
+    process.exit(1)
+  }
 }
 
 // ─── Interactive Menu ──────────────────────────────────────
@@ -295,11 +313,11 @@ async function showMenu() {
       await devMode()
       break
     case 'build':
-      buildMode()
+      await buildMode()
       process.exit(0)
       break
     case 'start':
-      startMode()
+      await startMode()
       process.exit(0)
       break
     case 'help':
@@ -315,83 +333,83 @@ async function showMenu() {
 
 const args = process.argv.slice(2)
 
-;(async () => {
-  if (args.includes('--help') || args.includes('-h')) {
-    showHelp()
-  }
-  if (args.includes('--version') || args.includes('-v')) {
-    showVersion()
-  }
+  ; (async () => {
+    if (args.includes('--help') || args.includes('-h')) {
+      showHelp()
+    }
+    if (args.includes('--version') || args.includes('-v')) {
+      showVersion()
+    }
 
-  if (args.length === 0) {
-    console.clear()
-    await showMenu()
-    return // ✅ Now safe inside async IIFE
-  }
+    if (args.length === 0) {
+      console.clear()
+      await showMenu()
+      return // ✅ Now safe inside async IIFE
+    }
 
-  const hasDev = args.includes('--dev')
-  const hasBuild = args.includes('--build')
-  const hasStart = args.includes('--start')
+    const hasDev = args.includes('--dev')
+    const hasBuild = args.includes('--build')
+    const hasStart = args.includes('--start')
 
-  const portIndex = args.indexOf('--port')
-  const portValue = portIndex !== -1 ? args[portIndex + 1] : null
+    const portIndex = args.indexOf('--port')
+    const portValue = portIndex !== -1 ? args[portIndex + 1] : null
 
-  const hostIndex = args.indexOf('--host')
-  const hostValue = hostIndex !== -1 ? args[hostIndex + 1] : null
+    const hostIndex = args.indexOf('--host')
+    const hostValue = hostIndex !== -1 ? args[hostIndex + 1] : null
 
-  // Validate port
-  let parsedPort = null
-  if (portValue !== null) {
-    if (!/^\d+$/.test(portValue)) {
-      log.error('❌ --port must be followed by a number.')
+    // Validate port
+    let parsedPort = null
+    if (portValue !== null) {
+      if (!/^\d+$/.test(portValue)) {
+        log.error('❌ --port must be followed by a number.')
+        process.exit(1)
+      }
+      parsedPort = parseInt(portValue, 10)
+      if (parsedPort <= 0 || parsedPort >= 65536) {
+        log.error('❌ Port must be between 1 and 65535.')
+        process.exit(1)
+      }
+    }
+
+    // Validate host
+    let parsedHost = null
+    if (hostValue !== null) {
+      const trimmed = hostValue.trim()
+      if (!trimmed) {
+        log.error('❌ --host must be followed by a host address.')
+        process.exit(1)
+      }
+      parsedHost = trimmed
+    }
+
+    if ((portValue !== null || hostValue !== null) && !hasDev) {
+      log.error('❌ --port and --host can only be used with --dev.')
       process.exit(1)
     }
-    parsedPort = parseInt(portValue, 10)
-    if (parsedPort <= 0 || parsedPort >= 65536) {
-      log.error('❌ Port must be between 1 and 65535.')
+
+    const modes = [hasDev, hasBuild, hasStart].filter(Boolean)
+    if (modes.length === 0) {
+      log.error('❌ Please specify one of: --dev, --build, or --start.')
       process.exit(1)
     }
-  }
-
-  // Validate host
-  let parsedHost = null
-  if (hostValue !== null) {
-    const trimmed = hostValue.trim()
-    if (!trimmed) {
-      log.error('❌ --host must be followed by a host address.')
+    if (modes.length > 1) {
+      log.error('❌ Only one mode may be specified at a time.')
       process.exit(1)
     }
-    parsedHost = trimmed
-  }
 
-  if ((portValue !== null || hostValue !== null) && !hasDev) {
-    log.error('❌ --port and --host can only be used with --dev.')
-    process.exit(1)
-  }
+    if (!isNextJsProject()) {
+      log.error('❌ This does not appear to be a Next.js project.')
+      process.exit(1)
+    }
 
-  const modes = [hasDev, hasBuild, hasStart].filter(Boolean)
-  if (modes.length === 0) {
-    log.error('❌ Please specify one of: --dev, --build, or --start.')
+    if (hasDev) {
+      await devMode(parsedPort, parsedHost)
+    } else if (hasBuild) {
+      await buildMode()
+    } else if (hasStart) {
+      await startMode()
+    }
+  })().catch((err) => {
+    log.error(`💥 Unexpected error: ${err.message}`)
     process.exit(1)
-  }
-  if (modes.length > 1) {
-    log.error('❌ Only one mode may be specified at a time.')
-    process.exit(1)
-  }
-
-  if (!isNextJsProject()) {
-    log.error('❌ This does not appear to be a Next.js project.')
-    process.exit(1)
-  }
-
-  if (hasDev) {
-    await devMode(parsedPort, parsedHost)
-  } else if (hasBuild) {
-    buildMode()
-  } else if (hasStart) {
-    startMode()
-  }
-})().catch((err) => {
-  log.error(`💥 Unexpected error: ${err.message}`)
-  process.exit(1)
-})
+  })

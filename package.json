@@ -4,7 +4,7 @@
   "description": "A simple CLI to easily run npm run dev, build, or start with custom PORT option for many next.js project",
   "main": "index.js",
   "bin": {
-    "next-run": "index.js"
+    "next-run": "./bin/index.js"
   },
   "scripts": {
     "dev": "next dev",
