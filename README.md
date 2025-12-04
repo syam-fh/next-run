@@ -1,37 +1,36 @@
-# `next-run`
+# next-run
 
-A simple CLI tool to quickly run `npm run dev`, `npm run build`, or `npm run start` in your Next.js projects—with optional custom **PORT** support.
+A command-line interface (CLI) tool designed to streamline the execution of Next.js project scripts (`npm run dev`, `npm run build`, `npm run start`), offering optional custom port configuration.
 
-## ✨ Features
+## Features
 
-* Choose your mode: **dev**, **build**, or **start**.
-* Optionally specify a custom **PORT** before running the command.
-* Skip typing full `npm run ...` commands—just run `next-run` and go!
+*   **Mode Selection**: Interactively choose between development (`dev`), build (`build`), or production start (`start`) modes.
+*   **Custom Port Configuration**: Optionally specify a custom port number prior to execution.
+*   **Simplified Execution**: Eliminates the need to manually type full `npm run` commands.
 
-## 📌 Requirements
+## Requirements
 
-* **Node.js ≥ 14.8.0** (recommended: **Node.js 18+**)
+*   **Node.js**: Version 14.8.0 or higher is required (Node.js 18+ is recommended).
+    *   This tool utilizes ECMAScript Modules (ESM) syntax.
+    *   The CLI operates independently via Node.js, ensuring compatibility with projects using CommonJS or ESM.
 
-  * This tool uses **ECMAScript Modules (ESM)** syntax internally (`import/export`).
-  * CLI runs independently via Node, so your project can still use CommonJS without issues.
+To verify your Node.js version, execute:
 
-> 💡 Check your version with:
->
-> ```bash
-> node --version
-> ```
+```bash
+node --version
+```
 
-## 📦 Prerequisites
+## Prerequisites
 
-Your project must already have **Next.js** installed, as `next-run` wraps the standard Next.js CLI (`next dev`, `next build`, `next start`).
+Ensure that **Next.js** is installed in your project. `next-run` acts as a wrapper around the standard Next.js CLI commands.
 
-To create a new Next.js project:
+To initialize a new Next.js project:
 
 ```bash
 npx create-next-app@latest your-app
 ```
 
-Ensure your `package.json` includes the standard scripts:
+Your `package.json` must contain the standard Next.js scripts:
 
 ```json
 {
@@ -43,22 +42,24 @@ Ensure your `package.json` includes the standard scripts:
 }
 ```
 
-## 🚀 Installation & Usage
+## Installation
 
-Install globally to use it easily anywhere:
+Install the package globally to access the `next-run` command from any directory:
 
 ```bash
 npm install -g next-run
 ```
 
-Then, from any Next.js project directory:
+## Usage
+
+Navigate to your Next.js project directory and run:
 
 ```bash
 next-run
 ```
 
----
-
-> ⚠️ **Note**: The CLI uses modern ESM internally and ESM-only dependencies (`chalk@5`, `inquirer@12`). You don’t need to convert your project—just ensure your **Node.js version is ≥14.8**.
+Follow the interactive prompts to select the desired mode and optionally configure the port.
 
 ---
+
+**Note**: This CLI leverages modern ESM features and dependencies (`chalk`, `inquirer`). It requires a Node.js runtime of version 14.8 or higher. No project configuration changes are necessary for compatibility.
